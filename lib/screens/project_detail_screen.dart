@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:estetika_ui/widgets/custom_app_bar.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -27,6 +29,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   ];
 
   late Map<String, dynamic> _projectData;
+  late Map<String, dynamic> _clientInfo = {};
   bool _isLoading = true;
   bool _hasError = false;
 
@@ -34,7 +37,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   void initState() {
     super.initState();
     print('Project passed to ProjectDetailScreen: ${widget.project}');
+    _loadClientInfo();
     _loadProjectDetails();
+  }
+
+  Future<void> _loadClientInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userString = prefs.getString('user');
+    if (userString != null) {
+      _clientInfo = Map<String, dynamic>.from(jsonDecode(userString));
+    } else {
+      _clientInfo = {};
+    }
+    setState(() {}); // To trigger rebuild for client info
   }
 
   Future<void> _loadProjectDetails() async {
@@ -130,10 +145,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           const SizedBox(height: 24),
 
           // Project Progress section
-          if (status != 'Cancelled') _buildProgressSection(),
+          _buildProgressSection(),
 
           // Designer section
-          if (_projectData['designerAssigned'] != null) _buildDesignerSection(),
+          _buildDesignerSection(),
 
           // Project Details section
           _buildSectionHeader('Project Details'),
@@ -150,19 +165,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             _buildDetailRow('Status',
                 _projectData['status']?.toString().toUpperCase() ?? 'N/A'),
             _buildDetailRow('Progress', '${_projectData['progress'] ?? 0}%'),
-            _buildDetailRow(
-                'Client', _projectData['projectCreator']?['fullName'] ?? 'N/A'),
-            _buildDetailRow('Client Email',
-                _projectData['projectCreator']?['email'] ?? 'N/A'),
           ]),
           const SizedBox(height: 16),
 
           // Client Information section
           _buildSectionHeader('Client Information'),
           _buildDetailCard([
-            _buildDetailRow('Client Name', _projectData['clientName']),
-            _buildDetailRow('Contact Number', _projectData['contactNumber']),
-            _buildDetailRow('Email', _projectData['email']),
+            _buildDetailRow('Client Name', _clientInfo['fullName'] ?? 'N/A'),
+            _buildDetailRow(
+                'Contact Number', _clientInfo['phoneNumber'] ?? 'N/A'),
+            _buildDetailRow('Email', _clientInfo['email'] ?? 'N/A'),
           ]),
           const SizedBox(height: 16),
 
@@ -172,9 +184,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           const SizedBox(height: 16),
 
           // Inspiration Links
-          if (_projectData['inspirationLinks'] != null &&
-              _projectData['inspirationLinks'].isNotEmpty)
-            _buildInspirationLinksSection(),
+
+          _buildInspirationLinksSection(),
 
           // Project Timeline
           _buildSectionHeader('Project Timeline'),
@@ -182,9 +193,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           const SizedBox(height: 16),
 
           // Comments Section
-          if (_projectData['comments'] != null &&
-              _projectData['comments'].isNotEmpty)
-            _buildCommentsSection(),
+          _buildCommentsSection(),
 
           // Action Buttons
           _buildActionButtons(),
@@ -363,8 +372,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Widget _buildDesignerSection() {
     final designer = _projectData['designerAssigned'];
-
+    if (designer == null) {
+      return Container(
+        width: double.infinity, // <-- Add this line
+        margin: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: const Text(
+          'No designer assigned yet.',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
     return Container(
+      width: double.infinity, // <-- Add this line
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -476,6 +501,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Widget _buildDetailCard(List<Widget> children) {
     return Container(
+      width: double.infinity, // <-- Add this line
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -538,23 +564,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildInspirationLinksSection() {
-    List<String> links = _projectData['inspirationLinks'];
-
+    List<String> links =
+        (_projectData['inspirationLinks'] ?? []).cast<String>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Inspiration Links'),
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.grey[300]!),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: links.map((link) => _buildLinkItem(link)).toList(),
-          ),
+          child: links.isEmpty
+              ? const Text('No inspiration links provided.',
+                  style: TextStyle(color: Colors.grey))
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: links.map((link) => _buildLinkItem(link)).toList(),
+                ),
         ),
         const SizedBox(height: 16),
       ],
@@ -602,26 +632,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         (_projectData['timeline'] ?? []).cast<Map<String, dynamic>>();
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[300]!),
       ),
-      child: ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: timeline.length,
-        itemBuilder: (context, index) {
-          final item = timeline[index];
-          return _buildTimelineItem(
-            item['stage'],
-            item['date'],
-            item['isCompleted'],
-            isLast: index == timeline.length - 1,
-          );
-        },
-      ),
+      child: timeline.isEmpty
+          ? const Text('No timeline available.',
+              style: TextStyle(color: Colors.grey))
+          : ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: timeline.length,
+              itemBuilder: (context, index) {
+                final item = timeline[index];
+                return _buildTimelineItem(
+                  item['stage'],
+                  item['date'],
+                  item['isCompleted'],
+                  isLast: index == timeline.length - 1,
+                );
+              },
+            ),
     );
   }
 
@@ -695,33 +729,36 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Widget _buildCommentsSection() {
     final List<Map<String, dynamic>> comments =
         (_projectData['comments'] ?? []).cast<Map<String, dynamic>>();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Comments & Updates'),
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.grey[300]!),
           ),
-          child: ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: comments.length,
-            itemBuilder: (context, index) {
-              final comment = comments[index];
-              return _buildCommentItem(
-                comment['user'],
-                comment['message'],
-                comment['date'],
-                comments, // Pass the full list
-                index,
-              );
-            },
-          ),
+          child: comments.isEmpty
+              ? const Text('No comments yet.',
+                  style: TextStyle(color: Colors.grey))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: comments.length,
+                  itemBuilder: (context, index) {
+                    final comment = comments[index];
+                    return _buildCommentItem(
+                      comment['user'],
+                      comment['message'],
+                      comment['date'],
+                      comments,
+                      index,
+                    );
+                  },
+                ),
         ),
         const SizedBox(height: 16),
       ],
