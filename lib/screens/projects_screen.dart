@@ -7,6 +7,11 @@ import 'package:estetika_ui/screens/send_project_screen.dart';
 import 'package:estetika_ui/screens/project_detail_screen.dart';
 import 'package:intl/intl.dart';
 
+extension StringCasingExtension on String {
+  String capitalize() =>
+      isNotEmpty ? '${this[0].toUpperCase()}${substring(1)}' : '';
+}
+
 class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key});
 
@@ -41,9 +46,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           'Authorization': 'Bearer ${prefs.getString('token') ?? ''}',
         },
       );
-      print('Fetching projects for user ID: $userId');
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final List<dynamic> data = decoded['project'] ?? [];
@@ -54,14 +56,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to load projects. Please try again.'),
+              content: Text('FailSed to load projects. Please try again.'),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
     } catch (e) {
-      print('Error fetching projects: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -199,21 +200,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   }
 
   Widget _buildProjectCard(Map<String, dynamic> project) {
-    // Derive status from tasks
-    List<dynamic> tasks = project['tasks'] ?? [];
-    String status = 'Pending';
-
-    if (tasks.isNotEmpty) {
-      bool allCompleted = tasks.every((t) => t['status'] == 'completed');
-      bool anyInProgress = tasks.any((t) => t['status'] == 'in-progress');
-      if (allCompleted) {
-        status = 'Completed';
-      } else if (anyInProgress) {
-        status = 'On Going';
-      } else {
-        status = 'Pending';
-      }
-    }
+    // Use status directly from project data
+    String status = (project['status'] ?? 'Pending').toString().capitalize();
 
     Color statusColor;
     switch (status) {

@@ -4,6 +4,7 @@ import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 class ProjectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -32,11 +33,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   late Map<String, dynamic> _clientInfo = {};
   bool _isLoading = true;
   bool _hasError = false;
+  double _overallProgress = 0.0;
+  List<Map<String, dynamic>> _timelinePhases = [];
 
   @override
   void initState() {
     super.initState();
-    print('Project passed to ProjectDetailScreen: ${widget.project}');
     _loadClientInfo();
     _loadProjectDetails();
   }
@@ -55,7 +57,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Future<void> _loadProjectDetails() async {
     await Future.delayed(const Duration(milliseconds: 300));
     try {
-      _projectData = widget.project; // Use the real project data
+      _projectData = widget.project;
+      await _fetchOverallProgress(); // <-- fetch progress after loading project
+      await _fetchTimelinePhases();
       setState(() {
         _isLoading = false;
         _hasError = false;
@@ -65,6 +69,91 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         _isLoading = false;
         _hasError = true;
       });
+    }
+  }
+
+  Future<void> _fetchOverallProgress() async {
+    try {
+      final projectId = _projectData['_id'];
+      final response = await http.get(
+        Uri.parse('https://your-base-url/api/phase?projectId=$projectId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List phases = decoded['phase'] ?? [];
+        if (phases.isNotEmpty) {
+          double total = 0;
+          int count = 0;
+          for (var phase in phases) {
+            if (phase['progress'] != null) {
+              total += (phase['progress'] as num).toDouble();
+              count++;
+            }
+          }
+          _overallProgress = count > 0 ? total / count : 0.0;
+        } else {
+          _overallProgress = 0.0;
+        }
+      } else {
+        _overallProgress = 0.0;
+      }
+    } catch (e) {
+      _overallProgress = 0.0;
+    }
+  }
+
+  Future<void> _fetchTimelinePhases() async {
+    _timelinePhases = [];
+    final List timeline = _projectData['timeline'] ?? [];
+
+    // Get token from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    for (var id in timeline) {
+      try {
+        final phaseId =
+            id is Map && id.containsKey('_id') ? id['_id'] : id.toString();
+        final response = await http.get(
+          Uri.parse('https://capstone-thl5.onrender.com/api/phase?id=$phaseId'),
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        );
+        print('Status: ${response.body}');
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded['phase'] != null) {
+            _timelinePhases.add(decoded['phase']);
+          }
+        }
+      } catch (e) {
+        // Optionally handle error
+      }
+    }
+    setState(() {});
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null) return 'N/A';
+    try {
+      final DateTime dateTime = DateTime.parse(dateString);
+      final String formattedDate =
+          '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+      return formattedDate;
+    } catch (e) {
+      return dateString; // Return the original string if parsing fails
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ProjectDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.project['_id'] != oldWidget.project['_id']) {
+      _projectData = widget.project;
+      _fetchTimelinePhases();
     }
   }
 
@@ -157,11 +246,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             _buildDetailRow('Room Type', _projectData['roomType']),
             _buildDetailRow('Budget', '₱${_projectData['budget'] ?? 'N/A'}'),
             _buildDetailRow(
-                'Start Date',
-                _projectData['startDate']?.toString().substring(0, 10) ??
-                    'N/A'),
-            _buildDetailRow('End Date',
-                _projectData['endDate']?.toString().substring(0, 10) ?? 'N/A'),
+                'Start Date', _formatDate(_projectData['startDate'])),
+            _buildDetailRow('End Date', _formatDate(_projectData['endDate'])),
             _buildDetailRow('Status',
                 _projectData['status']?.toString().toUpperCase() ?? 'N/A'),
             _buildDetailRow('Progress', '${_projectData['progress'] ?? 0}%'),
@@ -171,7 +257,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           // Client Information section
           _buildSectionHeader('Client Information'),
           _buildDetailCard([
-            _buildDetailRow('Client Name', _clientInfo['fullName'] ?? 'N/A'),
+            _buildDetailRow('Client Name',
+                _clientInfo['fullName'] ?? _clientInfo['username']),
             _buildDetailRow(
                 'Contact Number', _clientInfo['phoneNumber'] ?? 'N/A'),
             _buildDetailRow('Email', _clientInfo['email'] ?? 'N/A'),
@@ -247,14 +334,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            _projectData['location']?.toString() ?? 'N/A',
+            "Project Location: ${_projectData['location']?.toString() ?? 'N/A'}",
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[700],
             ),
           ),
           Text(
-            _projectData['year']?.toString() ?? 'N/A',
+            "Start Date: ${_formatDate(_projectData['startDate'])}",
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[700],
@@ -266,9 +353,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildProgressSection() {
-    final progress = (_projectData['progress'] ?? 0);
-    final double progressValue =
-        (progress is int) ? progress.toDouble() : (progress as double? ?? 0.0);
+    final double progressValue = _overallProgress; // Use fetched progress
     final currentStage = _projectData['currentStage']?.toString() ?? 'N/A';
 
     return Container(
@@ -305,9 +390,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 radius: 45.0,
                 lineWidth: 10.0,
                 animation: true,
-                percent: progressValue / 100,
+                percent: _projectData['progress'] / 100,
                 center: Text(
-                  '${progressValue.toInt()}%',
+                  '${_projectData['progress']}%',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18.0,
@@ -371,10 +456,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildDesignerSection() {
-    final designer = _projectData['designerAssigned'];
-    if (designer == null) {
+    final List members = _projectData['members'] ?? [];
+    if (members.isEmpty) {
       return Container(
-        width: double.infinity, // <-- Add this line
+        width: double.infinity,
         margin: const EdgeInsets.only(bottom: 24),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -388,8 +473,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ),
       );
     }
+
+    final designer = members.first;
     return Container(
-      width: double.infinity, // <-- Add this line
+      width: double.infinity,
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -414,7 +501,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               CircleAvatar(
                 radius: 30,
                 backgroundColor: Colors.grey[300],
-                backgroundImage: NetworkImage(designer['imageUrl']),
+                // Use a placeholder if no image
+                child: Text(
+                  designer['fullName'] != null &&
+                          designer['fullName'].isNotEmpty
+                      ? designer['fullName'][0]
+                      : '',
+                  style: const TextStyle(fontSize: 24, color: Colors.black),
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -422,29 +516,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      designer['name'],
+                      designer['fullName'] ?? 'N/A',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.star,
-                          size: 16,
-                          color: Colors.amber[700],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${designer['rating']} • ${designer['projectsCompleted']} Projects',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
+                    Text(
+                      designer['email'] ?? 'N/A',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      designer['role'] ?? 'N/A',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                      ),
                     ),
                   ],
                 ),
@@ -628,8 +720,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildTimelineSection() {
-    final List<Map<String, dynamic>> timeline =
-        (_projectData['timeline'] ?? []).cast<Map<String, dynamic>>();
+    if (_timelinePhases.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: const Text('No timeline available.',
+            style: TextStyle(color: Colors.grey)),
+      );
+    }
 
     return Container(
       width: double.infinity,
@@ -639,90 +742,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[300]!),
       ),
-      child: timeline.isEmpty
-          ? const Text('No timeline available.',
-              style: TextStyle(color: Colors.grey))
-          : ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: timeline.length,
-              itemBuilder: (context, index) {
-                final item = timeline[index];
-                return _buildTimelineItem(
-                  item['stage'],
-                  item['date'],
-                  item['isCompleted'],
-                  isLast: index == timeline.length - 1,
-                );
-              },
-            ),
-    );
-  }
-
-  Widget _buildTimelineItem(String stage, String date, bool isCompleted,
-      {bool isLast = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 20,
-          child: Column(
-            children: [
-              Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  color:
-                      isCompleted ? const Color(0xFF203B32) : Colors.grey[300],
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isCompleted
-                        ? const Color(0xFF203B32)
-                        : Colors.grey[400]!,
-                    width: 2,
-                  ),
-                ),
-              ),
-              if (!isLast)
-                Container(
-                  width: 2,
-                  height: 40,
-                  color:
-                      isCompleted ? const Color(0xFF203B32) : Colors.grey[300],
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  stage,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isCompleted
-                        ? const Color(0xFF203B32)
-                        : Colors.grey[700],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  date,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: List.generate(_timelinePhases.length, (index) {
+          final phase = _timelinePhases[index];
+          final isFirst = index == 0;
+          final isLast = index == _timelinePhases.length - 1;
+          final isCompleted = (phase['progress'] ?? 0) >= 100;
+          return _buildTimelineItem(
+            title: phase['title'] ?? 'No Title',
+            date: _formatDate(phase['startDate']),
+            isFirst: isFirst,
+            isLast: isLast,
+            isCompleted: isCompleted,
+          );
+        }),
+      ),
     );
   }
 
@@ -849,6 +884,79 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
+  Widget _buildTimelineItem({
+    required String title,
+    required String date,
+    required bool isFirst,
+    required bool isLast,
+    bool isCompleted = false,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Timeline indicator
+        Column(
+          children: [
+            // Top connector
+            if (!isFirst)
+              Container(
+                width: 2,
+                height: 16,
+                color: Colors.grey[300],
+              ),
+            // Circle
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: isCompleted ? const Color(0xFF203B32) : Colors.white,
+                border: Border.all(
+                  color:
+                      isCompleted ? const Color(0xFF203B32) : Colors.grey[400]!,
+                  width: 2,
+                ),
+                shape: BoxShape.circle,
+              ),
+            ),
+            // Bottom connector
+            if (!isLast)
+              Container(
+                width: 2,
+                height: 40,
+                color: Colors.grey[300],
+              ),
+          ],
+        ),
+        const SizedBox(width: 12),
+        // Timeline content
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color:
+                        isCompleted ? const Color(0xFF203B32) : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  date,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // Example for a detail section or card
   // Widget _buildProjectSummary(Map<String, dynamic> project) {
   //   return Column(
@@ -874,13 +982,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'Pending':
+      case 'pending':
         return Colors.orange;
-      case 'On Going':
+      case 'ongoing':
         return Colors.blue;
-      case 'Completed':
+      case 'ccompleted':
         return Colors.green;
-      case 'Cancelled':
+      case 'cancelled':
         return Colors.red;
       default:
         return Colors.blue;
