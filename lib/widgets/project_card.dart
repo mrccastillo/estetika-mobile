@@ -3,45 +3,31 @@ import 'package:flutter/material.dart';
 class ProjectCard extends StatelessWidget {
   final String title;
   final String status;
-  final String location;
-  final String year;
+  final Color statusColor;
+  final String description;
+  final String roomType;
+  final String budget;
+  final String startDate;
+  final String endDate;
+  final double progress;
   final VoidCallback? onTap;
-  
+
   const ProjectCard({
     super.key,
     required this.title,
     required this.status,
-    required this.location,
-    required this.year,
+    required this.statusColor,
+    required this.description,
+    required this.roomType,
+    required this.budget,
+    required this.startDate,
+    required this.endDate,
+    required this.progress,
     this.onTap,
   });
-  
+
   @override
   Widget build(BuildContext context) {
-    // Set status color based on status value
-    Color statusColor;
-    String displayStatus = status;
-    
-    // Replace 'Finished' with 'On Going' and set color accordingly
-    if (status == 'Finished') {
-      displayStatus = 'On Going';
-      statusColor = Colors.blue;
-    } else {
-      switch (status) {
-        case 'Pending':
-          statusColor = Colors.orange;
-          break;
-        case 'Completed':
-          statusColor = Colors.green;
-          break;
-        case 'Cancelled':
-          statusColor = Colors.red;
-          break;
-        default:
-          statusColor = Colors.blue;
-      }
-    }
-    
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -52,14 +38,12 @@ class ProjectCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Details only
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Project title and status
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,11 +59,8 @@ class ProjectCard extends StatelessWidget {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: const BoxDecoration(
-                            color: Colors.transparent,
-                          ),
                           child: Text(
-                            '($displayStatus)',
+                            status,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -90,21 +71,50 @@ class ProjectCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // Location
                     Text(
-                      location,
+                      description,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[700],
                       ),
                     ),
                     const SizedBox(height: 4),
-                    // Year
                     Text(
-                      year,
-                      style: TextStyle(
+                      'Room Type: $roomType',
+                      style: const TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[700],
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Budget: $budget',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Start: $startDate   End: $endDate',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    LinearProgressIndicator(
+                      value: progress / 100,
+                      minHeight: 6,
+                      backgroundColor: Colors.grey[200],
+                      color: Colors.green,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Progress: ${progress.toStringAsFixed(1)}%',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
                       ),
                     ),
                   ],
