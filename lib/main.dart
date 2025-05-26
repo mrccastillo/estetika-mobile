@@ -7,10 +7,11 @@ import 'package:estetika_ui/screens/profile_screen.dart';
 import 'package:estetika_ui/screens/inbox_screen.dart';
 import 'package:estetika_ui/screens/projects_screen.dart';
 import 'package:estetika_ui/screens/notification_screen.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+// import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
-  await dotenv.load(fileName: ".env");
+  WidgetsFlutterBinding.ensureInitialized();
+  // await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
 

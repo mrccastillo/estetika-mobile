@@ -110,7 +110,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: Colors.white,
       appBar: const CustomAppBar(
         isProfileScreen: true,
-        showBackButton: true, actions: [], title: '',
+        showBackButton: true,
+        actions: [],
+        title: '',
       ),
       body: SingleChildScrollView(
         child: Padding(
