@@ -57,13 +57,11 @@ class _SignInScreenState extends State<SigninScreen> {
     print('Password: ${_passwordController.text}');
 
     try {
-      // Prepare the request body
       final body = {
         'email': _emailController.text,
         'password': _passwordController.text,
       };
       print('Request body: $body');
-      // Send POST request to the login API
 
       final response = await http.post(
         Uri.parse('https://capstone-thl5.onrender.com/api/auth/login'),
