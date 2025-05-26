@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:estetika_ui/widgets/custom_app_bar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:estetika_ui/screens/signin_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -10,12 +13,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   // Form controllers
-  final TextEditingController _nameController =
-      TextEditingController(text: 'John Doe');
-  final TextEditingController _emailController =
-      TextEditingController(text: 'john.doe@example.com');
-  final TextEditingController _phoneController =
-      TextEditingController(text: '+63 912 345 6789');
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _currentPasswordController =
       TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
@@ -25,6 +25,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isEditing = false;
   bool _isChangingPassword = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userString = prefs.getString('user');
+    if (userString != null) {
+      final user = jsonDecode(userString);
+      print('Loaded user: $user'); 
+      setState(() {
+        _nameController.text = user['fullName'] ?? user['username'];
+        _emailController.text = user['email'] ?? '';
+        _phoneController.text = user['phoneNumber'] ?? '';
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -102,6 +122,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SnackBar(content: Text('Password updated successfully')),
       );
     });
+  }
+
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('token');
+    await prefs.remove('user');
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const SigninScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -292,7 +325,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (!_isEditing && !_isChangingPassword)
                 ElevatedButton.icon(
                   onPressed: () {
-                    Navigator.pushReplacementNamed(context, '/welcome');
+                    _logout();
                   },
                   icon: const Icon(Icons.logout, size: 20),
                   label: const Text('Logout'),
