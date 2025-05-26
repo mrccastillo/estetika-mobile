@@ -33,117 +33,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   @override
   void initState() {
     super.initState();
+    print('Project passed to ProjectDetailScreen: ${widget.project}');
     _loadProjectDetails();
   }
 
   Future<void> _loadProjectDetails() async {
-    // Simulate API call to get complete project details
-    await Future.delayed(const Duration(seconds: 1));
-    
+    await Future.delayed(const Duration(milliseconds: 300));
     try {
-      // In a real app, you would fetch this data from your backend
-      // For now, we'll create mock data based on the passed project
-      
-      // Get project status
-      String status = widget.project['status'];
-      int currentStageIndex = 0;
-      double progress = 0.0;
-      
-      // Set stage and progress based on status
-      switch (status) {
-        case 'Pending':
-          currentStageIndex = 0;
-          progress = 0.1;
-          break;
-        case 'On Going':
-          currentStageIndex = 2;
-          progress = 0.4;
-          break;
-        case 'Completed':
-          currentStageIndex = 5;
-          progress = 1.0;
-          break;
-        case 'Cancelled':
-          currentStageIndex = -1;
-          progress = 0.0;
-          break;
-        default:
-          currentStageIndex = 0;
-          progress = 0.1;
-      }
-
-      // Mock data for a project
-      _projectData = {
-        ...widget.project,
-        'currentStage': currentStageIndex >= 0 ? _projectStages[currentStageIndex] : 'N/A',
-        'progress': progress,
-        'clientName': 'Maria Santos',
-        'contactNumber': '+63 912 345 6789',
-        'email': 'maria.santos@example.com',
-        'roomType': 'Living Room',
-        'projectSize': '45 sqm',
-        'budget': '₱ 350,000',
-        'description': 'Modern minimalist design with neutral tones. Open concept living area with large windows for natural light. Needs storage solutions for small space.',
-        'startDate': 'June 10, 2025',
-        'estimatedCompletionDate': 'August 25, 2025',
-        'designerAssigned': status != 'Pending' && status != 'Cancelled' ? {
-          'name': 'Designer Alex Reyes',
-          'imageUrl': 'https://i.pravatar.cc/150?img=68',
-          'rating': 4.8,
-          'projectsCompleted': 24,
-        } : null,
-        'inspirationLinks': [
-          'https://www.pinterest.com/pin/492649944689022',
-          'https://www.houzz.com/magazine/room-of-the-day-light-and-bright'
-        ],
-        'timeline': [
-          {
-            'stage': 'Brief Review',
-            'date': 'June 10, 2025',
-            'isCompleted': status != 'Pending' && status != 'Cancelled',
-          },
-          {
-            'stage': 'Initial Concepts',
-            'date': 'June 20, 2025',
-            'isCompleted': status == 'On Going' || status == 'Completed',
-          },
-          {
-            'stage': 'Design Presentation',
-            'date': 'July 5, 2025',
-            'isCompleted': status == 'On Going' || status == 'Completed',
-          },
-          {
-            'stage': 'Finalize Design',
-            'date': 'July 20, 2025',
-            'isCompleted': status == 'Completed',
-          },
-          {
-            'stage': 'Implementation',
-            'date': 'August 1, 2025',
-            'isCompleted': status == 'Completed',
-          },
-          {
-            'stage': 'Project Completion',
-            'date': 'August 25, 2025',
-            'isCompleted': status == 'Completed',
-          },
-        ],
-        'comments': [
-          {
-            'user': 'Designer Alex Reyes',
-            'message': 'Initial concept sketches are ready for review. Please schedule a time for presentation.',
-            'date': 'June 18, 2025',
-          },
-          {
-            'user': 'Admin',
-            'message': 'Project proposal approved. Alex Reyes has been assigned as your designer.',
-            'date': 'June 12, 2025',
-          },
-        ],
-      };
-
+      _projectData = widget.project; // Use the real project data
       setState(() {
         _isLoading = false;
+        _hasError = false;
       });
     } catch (e) {
       setState(() {
@@ -230,23 +130,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           const SizedBox(height: 24),
 
           // Project Progress section
-          if (status != 'Cancelled')
-            _buildProgressSection(),
-          
+          if (status != 'Cancelled') _buildProgressSection(),
+
           // Designer section
-          if (_projectData['designerAssigned'] != null)
-            _buildDesignerSection(),
-          
+          if (_projectData['designerAssigned'] != null) _buildDesignerSection(),
+
           // Project Details section
           _buildSectionHeader('Project Details'),
           _buildDetailCard([
             _buildDetailRow('Project Name', _projectData['title']),
             _buildDetailRow('Room Type', _projectData['roomType']),
-            _buildDetailRow('Project Size', _projectData['projectSize']),
-            _buildDetailRow('Location', _projectData['location']),
-            _buildDetailRow('Budget', _projectData['budget']),
-            _buildDetailRow('Start Date', _projectData['startDate']),
-            _buildDetailRow('Est. Completion', _projectData['estimatedCompletionDate']),
+            _buildDetailRow('Budget', '₱${_projectData['budget'] ?? 'N/A'}'),
+            _buildDetailRow(
+                'Start Date',
+                _projectData['startDate']?.toString().substring(0, 10) ??
+                    'N/A'),
+            _buildDetailRow('End Date',
+                _projectData['endDate']?.toString().substring(0, 10) ?? 'N/A'),
+            _buildDetailRow('Status',
+                _projectData['status']?.toString().toUpperCase() ?? 'N/A'),
+            _buildDetailRow('Progress', '${_projectData['progress'] ?? 0}%'),
+            _buildDetailRow(
+                'Client', _projectData['projectCreator']?['fullName'] ?? 'N/A'),
+            _buildDetailRow('Client Email',
+                _projectData['projectCreator']?['email'] ?? 'N/A'),
           ]),
           const SizedBox(height: 16),
 
@@ -275,7 +182,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           const SizedBox(height: 16),
 
           // Comments Section
-          if (_projectData['comments'] != null && _projectData['comments'].isNotEmpty)
+          if (_projectData['comments'] != null &&
+              _projectData['comments'].isNotEmpty)
             _buildCommentsSection(),
 
           // Action Buttons
@@ -310,7 +218,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -329,14 +238,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            _projectData['location'],
+            _projectData['location']?.toString() ?? 'N/A',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[700],
             ),
           ),
           Text(
-            _projectData['year'],
+            _projectData['year']?.toString() ?? 'N/A',
             style: TextStyle(
               fontSize: 16,
               color: Colors.grey[700],
@@ -348,9 +257,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildProgressSection() {
-    final progress = _projectData['progress'] as double;
-    final currentStage = _projectData['currentStage'] as String;
-    
+    final progress = (_projectData['progress'] ?? 0);
+    final double progressValue =
+        (progress is int) ? progress.toDouble() : (progress as double? ?? 0.0);
+    final currentStage = _projectData['currentStage']?.toString() ?? 'N/A';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
@@ -385,9 +296,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 radius: 45.0,
                 lineWidth: 10.0,
                 animation: true,
-                percent: progress,
+                percent: progressValue / 100,
                 center: Text(
-                  '${(progress * 100).toInt()}%',
+                  '${progressValue.toInt()}%',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18.0,
@@ -425,7 +336,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           const SizedBox(height: 16),
           LinearProgressIndicator(
-            value: progress,
+            value: progressValue / 100,
             backgroundColor: Colors.grey[200],
             color: const Color(0xFF203B32),
             minHeight: 6,
@@ -452,7 +363,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Widget _buildDesignerSection() {
     final designer = _projectData['designerAssigned'];
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
@@ -522,7 +433,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF203B32),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -576,7 +488,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, dynamic value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -594,7 +506,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           Expanded(
             child: Text(
-              value,
+              value?.toString() ?? 'N/A', // <-- Fix here
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -627,7 +539,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Widget _buildInspirationLinksSection() {
     List<String> links = _projectData['inspirationLinks'];
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -686,8 +598,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildTimelineSection() {
-    List<Map<String, dynamic>> timeline = _projectData['timeline'];
-    
+    final List<Map<String, dynamic>> timeline =
+        (_projectData['timeline'] ?? []).cast<Map<String, dynamic>>();
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -712,7 +625,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  Widget _buildTimelineItem(String stage, String date, bool isCompleted, {bool isLast = false}) {
+  Widget _buildTimelineItem(String stage, String date, bool isCompleted,
+      {bool isLast = false}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -724,10 +638,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 width: 16,
                 height: 16,
                 decoration: BoxDecoration(
-                  color: isCompleted ? const Color(0xFF203B32) : Colors.grey[300],
+                  color:
+                      isCompleted ? const Color(0xFF203B32) : Colors.grey[300],
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isCompleted ? const Color(0xFF203B32) : Colors.grey[400]!,
+                    color: isCompleted
+                        ? const Color(0xFF203B32)
+                        : Colors.grey[400]!,
                     width: 2,
                   ),
                 ),
@@ -736,7 +653,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 Container(
                   width: 2,
                   height: 40,
-                  color: isCompleted ? const Color(0xFF203B32) : Colors.grey[300],
+                  color:
+                      isCompleted ? const Color(0xFF203B32) : Colors.grey[300],
                 ),
             ],
           ),
@@ -753,7 +671,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: isCompleted ? const Color(0xFF203B32) : Colors.grey[700],
+                    color: isCompleted
+                        ? const Color(0xFF203B32)
+                        : Colors.grey[700],
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -773,8 +693,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildCommentsSection() {
-    List<Map<String, dynamic>> comments = _projectData['comments'];
-    
+    final List<Map<String, dynamic>> comments =
+        (_projectData['comments'] ?? []).cast<Map<String, dynamic>>();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -796,7 +717,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 comment['user'],
                 comment['message'],
                 comment['date'],
-                comment['profileImage']
+                comments, // Pass the full list
+                index,
               );
             },
           ),
@@ -806,7 +728,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  Widget _buildCommentItem(String user, String message, String date, dynamic comments) {
+  Widget _buildCommentItem(String user, String message, String date,
+      List<Map<String, dynamic>> comments, int index) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -836,8 +759,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             message,
             style: const TextStyle(fontSize: 14),
           ),
-          if (user != comments.last['user'])
-            const Divider(height: 24),
+          // Only show divider if not the last comment
+          if (index != comments.length - 1) const Divider(height: 24),
         ],
       ),
     );
@@ -886,6 +809,29 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // Example for a detail section or card
+  Widget _buildProjectSummary(Map<String, dynamic> project) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Title: ${project['title'] ?? 'N/A'}'),
+        Text('Description: ${project['description'] ?? 'N/A'}'),
+        Text('Room Type: ${project['roomType'] ?? 'N/A'}'),
+        Text('Budget: ₱${project['budget'] ?? 'N/A'}'),
+        Text(
+            'Start Date: ${project['startDate']?.toString().substring(0, 10) ?? 'N/A'}'),
+        Text(
+            'End Date: ${project['endDate']?.toString().substring(0, 10) ?? 'N/A'}'),
+        Text('Status: ${project['status']?.toString().toUpperCase() ?? 'N/A'}'),
+        Text('Progress: ${(project['progress'] ?? 0).toString()}%'),
+        Text('Client: ${project['projectCreator']?['fullName'] ?? 'N/A'}'),
+        Text('Client Email: ${project['projectCreator']?['email'] ?? 'N/A'}'),
+        Text(
+            'Members: ${project['members'] != null ? project['members'].length.toString() : '0'}'),
+      ],
     );
   }
 

@@ -41,7 +41,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           'Authorization': 'Bearer ${prefs.getString('token') ?? ''}',
         },
       );
-
+      print('Fetching projects for user ID: $userId');
       print('Response status: ${response.statusCode}');
       print('Response body: ${response.body}');
       if (response.statusCode == 200) {
