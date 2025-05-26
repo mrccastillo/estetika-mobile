@@ -813,27 +813,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   // Example for a detail section or card
-  Widget _buildProjectSummary(Map<String, dynamic> project) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Title: ${project['title'] ?? 'N/A'}'),
-        Text('Description: ${project['description'] ?? 'N/A'}'),
-        Text('Room Type: ${project['roomType'] ?? 'N/A'}'),
-        Text('Budget: ₱${project['budget'] ?? 'N/A'}'),
-        Text(
-            'Start Date: ${project['startDate']?.toString().substring(0, 10) ?? 'N/A'}'),
-        Text(
-            'End Date: ${project['endDate']?.toString().substring(0, 10) ?? 'N/A'}'),
-        Text('Status: ${project['status']?.toString().toUpperCase() ?? 'N/A'}'),
-        Text('Progress: ${(project['progress'] ?? 0).toString()}%'),
-        Text('Client: ${project['projectCreator']?['fullName'] ?? 'N/A'}'),
-        Text('Client Email: ${project['projectCreator']?['email'] ?? 'N/A'}'),
-        Text(
-            'Members: ${project['members'] != null ? project['members'].length.toString() : '0'}'),
-      ],
-    );
-  }
+  // Widget _buildProjectSummary(Map<String, dynamic> project) {
+  //   return Column(
+  //     crossAxisAlignment: CrossAxisAlignment.start,
+  //     children: [
+  //       Text('Title: ${project['title'] ?? 'N/A'}'),
+  //       Text('Description: ${project['description'] ?? 'N/A'}'),
+  //       Text('Room Type: ${project['roomType'] ?? 'N/A'}'),
+  //       Text('Budget: ₱${project['budget'] ?? 'N/A'}'),
+  //       Text(
+  //           'Start Date: ${project['startDate']?.toString().substring(0, 10) ?? 'N/A'}'),
+  //       Text(
+  //           'End Date: ${project['endDate']?.toString().substring(0, 10) ?? 'N/A'}'),
+  //       Text('Status: ${project['status']?.toString().toUpperCase() ?? 'N/A'}'),
+  //       Text('Progress: ${(project['progress'] ?? 0).toString()}%'),
+  //       Text('Client: ${project['projectCreator']?['fullName'] ?? 'N/A'}'),
+  //       Text('Client Email: ${project['projectCreator']?['email'] ?? 'N/A'}'),
+  //       Text(
+  //           'Members: ${project['members'] != null ? project['members'].length.toString() : '0'}'),
+  //     ],
+  //   );
+  // }
 
   Color _getStatusColor(String status) {
     switch (status) {
