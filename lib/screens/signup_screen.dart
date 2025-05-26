@@ -2,6 +2,8 @@ import 'package:estetika_ui/screens/signin_screen.dart';
 import 'package:estetika_ui/screens/welcome_screen.dart';
 import 'package:estetika_ui/widgets/custom_scaffold.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -15,9 +17,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool agreePersonalData = true;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
 
   String? validateEmail(String? value) {
     if (value == null || value.isEmpty) {
@@ -50,15 +57,62 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _usernameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
+  Future<void> _registerUser() async {
+    final url = Uri.parse('https://capstone-thl5.onrender.com/api/auth/register');
+    final body = {
+      "username": _usernameController.text.trim(),
+      "firstName": _firstNameController.text.trim(),
+      "lastName": _lastNameController.text.trim(),
+      "email": _emailController.text.trim(),
+      "password": _passwordController.text,
+      "phoneNumber": _phoneController.text.trim(),
+    };
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 201) {
+        print('Registration successful: $data');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registration successful! Please sign in.')),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const SigninScreen()),
+        );
+      } else {
+        // Show error from API
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Registration failed')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('An error occurred. Please try again.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return CustomScaffold(
-      showBackIcon: true, // <-- Ensure this is true for Sign Up
+      showBackIcon: true,
       child: WillPopScope(
         onWillPop: () async {
           Navigator.pushReplacement(
@@ -98,86 +152,85 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   'Create Account',
                                   style: TextStyle(
                                     fontSize: 30.0,
-                                    fontWeight: FontWeight.w600, // Demi
+                                    fontWeight: FontWeight.w600,
                                     fontFamily: 'Figtree',
                                     color: const Color(0xFF203B32),
                                   ),
                                 ),
                                 const SizedBox(height: 40.0),
+                                // First Name & Last Name side by side
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _firstNameController,
+                                        validator: (value) =>
+                                            value == null || value.isEmpty
+                                                ? 'Enter first name'
+                                                : null,
+                                        decoration: InputDecoration(
+                                          label: const Text('First Name'),
+                                          hintText: 'First Name',
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _lastNameController,
+                                        validator: (value) =>
+                                            value == null || value.isEmpty
+                                                ? 'Enter last name'
+                                                : null,
+                                        decoration: InputDecoration(
+                                          label: const Text('Last Name'),
+                                          hintText: 'Last Name',
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 25.0),
                                 TextFormField(
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter your full name';
-                                    }
-                                    return null;
-                                  },
+                                  controller: _usernameController,
+                                  validator: (value) =>
+                                      value == null || value.isEmpty
+                                          ? 'Enter username'
+                                          : null,
                                   decoration: InputDecoration(
-                                    label: const Text(
-                                      'Full Name',
-                                      style: TextStyle(
-                                        fontFamily: 'Figtree',
-                                        fontWeight: FontWeight.w500, // Medium
-                                      ),
-                                    ),
-                                    hintText: 'Enter Full Name',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.black26,
-                                      fontFamily: 'Figtree',
-                                      fontWeight: FontWeight.w300, // Light
-                                    ),
+                                    label: const Text('Username'),
+                                    hintText: 'Enter Username',
                                     border: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 25.0),
                                 TextFormField(
+                                  controller: _emailController,
                                   validator: validateEmail,
                                   decoration: InputDecoration(
-                                    label: const Text(
-                                      'Email',
-                                      style: TextStyle(
-                                        fontFamily: 'Figtree',
-                                        fontWeight: FontWeight.w500, // Medium
-                                      ),
-                                    ),
+                                    label: const Text('Email'),
                                     hintText: 'Enter Email',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.black26,
-                                      fontFamily: 'Figtree',
-                                      fontWeight: FontWeight.w300, // Light
-                                    ),
                                     border: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 25.0),
                                 TextFormField(
+                                  controller: _phoneController,
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
                                       return 'Please enter your phone number';
                                     }
-                                    // Basic phone validation: must be digits and at least 10 characters
-                                    if (!RegExp(r'^\d{10,}$').hasMatch(
+                                    if (!RegExp(r'^\+?\d{10,}$').hasMatch(
                                         value.replaceAll(RegExp(r'\D'), ''))) {
                                       return 'Please enter a valid phone number';
                                     }
@@ -185,29 +238,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   },
                                   keyboardType: TextInputType.phone,
                                   decoration: InputDecoration(
-                                    label: const Text(
-                                      'Phone Number',
-                                      style: TextStyle(
-                                        fontFamily: 'Figtree',
-                                        fontWeight: FontWeight.w500, // Medium
-                                      ),
-                                    ),
+                                    label: const Text('Phone Number'),
                                     hintText: 'Enter Phone Number',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.black26,
-                                      fontFamily: 'Figtree',
-                                      fontWeight: FontWeight.w300, // Light
-                                    ),
                                     border: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
@@ -218,29 +251,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   obscureText: _obscurePassword,
                                   validator: validatePassword,
                                   decoration: InputDecoration(
-                                    label: const Text(
-                                      'Password',
-                                      style: TextStyle(
-                                        fontFamily: 'Figtree',
-                                        fontWeight: FontWeight.w500, // Medium
-                                      ),
-                                    ),
+                                    label: const Text('Password'),
                                     hintText: 'Enter Password',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.black26,
-                                      fontFamily: 'Figtree',
-                                      fontWeight: FontWeight.w300, // Light
-                                    ),
                                     border: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     suffixIcon: IconButton(
@@ -272,29 +285,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     return null;
                                   },
                                   decoration: InputDecoration(
-                                    label: const Text(
-                                      'Confirm Password',
-                                      style: TextStyle(
-                                        fontFamily: 'Figtree',
-                                        fontWeight: FontWeight.w500, // Medium
-                                      ),
-                                    ),
+                                    label: const Text('Confirm Password'),
                                     hintText: 'Re-enter Password',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.black26,
-                                      fontFamily: 'Figtree',
-                                      fontWeight: FontWeight.w300, // Light
-                                    ),
                                     border: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderSide: const BorderSide(
-                                        color: Colors.black12,
-                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     suffixIcon: IconButton(
@@ -331,8 +324,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                         style: TextStyle(
                                           color: Colors.black45,
                                           fontFamily: 'Figtree',
-                                          fontWeight:
-                                              FontWeight.w400, // Regular
+                                          fontWeight: FontWeight.w400,
                                         ),
                                       ),
                                     ),
@@ -343,32 +335,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   width: double.infinity,
                                   child: ElevatedButton(
                                     onPressed: () {
-                                      if (_formSignupKey.currentState!
-                                              .validate() &&
-                                          agreePersonalData) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Processing Data'),
-                                            duration: Duration(seconds: 1),
-                                          ),
-                                        );
-                                        Future.delayed(
-                                            const Duration(seconds: 1), () {
-                                          Navigator.pushReplacement(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  const SigninScreen(),
-                                            ),
-                                          );
-                                        });
+                                      if (_formSignupKey.currentState!.validate() && agreePersonalData) {
+                                        _registerUser();
                                       } else if (!agreePersonalData) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
+                                        ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
-                                            content: Text(
-                                                'Please agree to the processing of personal data'),
+                                            content: Text('Please agree to the processing of personal data'),
                                           ),
                                         );
                                       }
@@ -382,7 +354,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       style: TextStyle(
                                         fontFamily: 'Figtree',
                                         fontWeight: FontWeight.w500,
-                                        fontSize: 18, // Medium
+                                        fontSize: 18,
                                       ),
                                     ),
                                   ),
@@ -396,7 +368,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       style: TextStyle(
                                         color: Colors.black45,
                                         fontFamily: 'Figtree',
-                                        fontWeight: FontWeight.w400, // Regular
+                                        fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                     GestureDetector(
@@ -412,7 +384,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       child: Text(
                                         'Sign in',
                                         style: TextStyle(
-                                          fontWeight: FontWeight.w600, // Demi
+                                          fontWeight: FontWeight.w600,
                                           fontFamily: 'Figtree',
                                           color: const Color(0xFF203B32),
                                         ),

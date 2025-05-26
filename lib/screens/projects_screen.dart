@@ -38,7 +38,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       if (userString == null) return;
       final user = jsonDecode(userString);
       final userId = user['id'];
-
+      print('User ID: $userId');
       final response = await http.get(
         Uri.parse(
             'https://capstone-thl5.onrender.com/api/project?projectCreator=$userId'),
@@ -47,17 +47,22 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           'Authorization': 'Bearer ${prefs.getString('token') ?? ''}',
         },
       );
+      print('Response body: ${response.statusCode} ${response.body}');
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final List<dynamic> data = decoded['project'] ?? [];
         setState(() {
           _projects = data.cast<Map<String, dynamic>>();
         });
+      } else if (response.statusCode == 404) {
+        setState(() {
+          _projects = [];
+        });
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('FailSed to load projects. Please try again.'),
+              content: Text('Failed to load projects. Please try again.'),
               backgroundColor: Colors.red,
             ),
           );
@@ -104,25 +109,32 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
           // Projects list
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              itemCount: _projects.length,
-              itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProjectDetailScreen(
-                          project: _projects[index],
-                        ),
-                      ),
-                    );
-                  },
-                  child: _buildProjectCard(_projects[index]),
-                );
-              },
-            ),
+            child: _projects.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No projects',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    itemCount: _projects.length,
+                    itemBuilder: (context, index) {
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProjectDetailScreen(
+                                project: _projects[index],
+                              ),
+                            ),
+                          );
+                        },
+                        child: _buildProjectCard(_projects[index]),
+                      );
+                    },
+                  ),
           ),
 
           // Send Project Proposal button
