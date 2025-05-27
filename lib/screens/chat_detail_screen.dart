@@ -36,7 +36,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       widget.onSendMessage(_messageController.text.trim());
       _messageController.clear();
       setState(() => _isTyping = false);
-      
+
       // Scroll to bottom after sending message
       Future.delayed(const Duration(milliseconds: 100), () {
         if (_scrollController.hasClients) {
@@ -224,7 +224,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               itemCount: sortedMessages.length,
               itemBuilder: (context, index) {
-                final message = sortedMessages[sortedMessages.length - 1 - index];
+                final message =
+                    sortedMessages[sortedMessages.length - 1 - index];
                 return _buildMessageItem(message);
               },
             ),
@@ -308,11 +309,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   Widget _buildMessageItem(MessageItem message) {
     final isFromUser = message.isFromUser;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
-        mainAxisAlignment: isFromUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isFromUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isFromUser) ...[
@@ -321,22 +323,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               backgroundImage: message.profileImage != null
                   ? AssetImage(message.profileImage!)
                   : null,
-              backgroundColor: message.profileImage == null
-                  ? Colors.grey[400]
-                  : null,
+              backgroundColor:
+                  message.profileImage == null ? Colors.grey[400] : null,
               child: message.profileImage == null
                   ? const Icon(Icons.person, color: Colors.white, size: 16)
                   : null,
             ),
             const SizedBox(width: 8),
           ],
-          
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: isFromUser ? const Color(0xff203B32) : Colors.grey[200],
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: isFromUser
+                    ? const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(16),
+                        bottomRight:
+                            Radius.circular(4), // less rounded for user
+                      )
+                    : const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                        bottomRight: Radius.circular(16),
+                        bottomLeft:
+                            Radius.circular(4), // less rounded for others
+                      ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -13,7 +13,7 @@ class ProjectCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   const ProjectCard({
-    super.key,
+    Key? key,
     required this.title,
     required this.status,
     required this.statusColor,
@@ -24,7 +24,7 @@ class ProjectCard extends StatelessWidget {
     required this.endDate,
     required this.progress,
     this.onTap,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

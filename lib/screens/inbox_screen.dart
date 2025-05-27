@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:estetika_ui/widgets/custom_app_bar.dart';
 import 'package:estetika_ui/screens/chat_detail_screen.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -10,393 +14,416 @@ class InboxScreen extends StatefulWidget {
 }
 
 class _InboxScreenState extends State<InboxScreen> {
-  final List<MessageItem> _messages = [
-    MessageItem(
-      sender: "Ken Dela Cruz",
-      content: "Hello i'm your designer assigned to your project",
-      timestamp: DateTime(2025, 4, 12, 10, 32),
-      isFromUser: false,
-      profileImage: 'assets/images/profile1.jpg',
-      isRead: false,
-    ),
-    MessageItem(
-      sender: "Kehlani Marie",
-      content: "Thanks for the update! Looking forward to our meeting.",
-      timestamp: DateTime(2025, 4, 11, 15, 20),
-      isFromUser: false,
-      profileImage: 'assets/images/profile2.jpg',
-      isRead: true,
-    ),
-    MessageItem(
-      sender: "Bronny James",
-      content: "Not sure if I can make it to the meeting tomorrow.",
-      timestamp: DateTime(2025, 4, 10, 9, 45),
-      isFromUser: false,
-      profileImage: 'assets/images/profile3.jpg',
-      isRead: true,
-    ),
-  ];
+  late IO.Socket _socket;
+
+  final List<MessageItem> _messages = [];
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   List<MessageItem> _filteredMessages = [];
 
+  String? _userId;
+  String? _userToken;
+  List<Map<String, dynamic>> _users = [];
+  List<Map<String, dynamic>> _filteredUsers = [];
+
   @override
   void initState() {
     super.initState();
     _filteredMessages = List.from(_messages);
+    _initSocket();
+    _fetchUsers();
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
+  void _initSocket() async {
+    // Make sure _userToken is set before calling this!
+    _socket = IO.io(
+      'https://capstone-thl5.onrender.com', // <-- Replace with your server URL
+      IO.OptionBuilder().setTransports(['websocket']).setAuth(
+              {'token': _userToken}) // Pass token as auth
+          .build(),
+    );
+    _socket.connect();
 
-  void _filterMessages(String query) {
-    setState(() {
-      _searchQuery = query;
-      if (query.isEmpty) {
+    // Announce online
+    if (_userId != null) {
+      _socket.emit('online', _userId);
+    }
+
+    // Listen for new messages
+    _socket.on('receive_private_message', (data) {
+      setState(() {
+        _messages.insert(
+          0,
+          MessageItem(
+            sender: data['sender'],
+            recipient: data['recipient'], // <-- Add this
+            content: data['content'],
+            timestamp: DateTime.parse(data['timestamp']),
+            isFromUser: data['sender'] == _userId,
+            profileImage: null,
+            isRead: false,
+          ),
+        );
         _filteredMessages = List.from(_messages);
-      } else {
-        _filteredMessages = _messages
-            .where((message) =>
-                message.sender.toLowerCase().contains(query.toLowerCase()) ||
-                message.content.toLowerCase().contains(query.toLowerCase()))
-            .toList();
-      }
+      });
     });
+  }
+
+  Future<void> _fetchUsers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userString = prefs.getString('user');
+    final token = prefs.getString('token');
+    if (userString == null || token == null) return;
+    final user = jsonDecode(userString);
+    _userId = user['_id'] ?? user['id'];
+    _userToken = token;
+
+    final response = await http.get(
+      Uri.parse('https://capstone-thl5.onrender.com/api/user?exclude=$_userId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      final List users = jsonDecode(response.body);
+      setState(() {
+        _users = users.cast<Map<String, dynamic>>();
+        _filteredUsers = List.from(_users);
+      });
+    }
+  }
+
+  Future<void> _fetchMessagesForUser(Map<String, dynamic> user) async {
+    if (_userId == null || _userToken == null) return;
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'https://capstone-thl5.onrender.com/api/message?user1=$_userId&user2=${user['_id']}'),
+        headers: {
+          'Authorization': 'Bearer $_userToken',
+        },
+      );
+      print(
+          'Message API response: ${response.body}'); // <-- Print the response here
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        setState(() {
+          _messages.clear();
+          for (var msg in data) {
+            // Example in _fetchMessagesForUser and socket listener
+            _messages.add(
+              MessageItem(
+                sender: msg['sender'],
+                recipient: msg['recipient'], // <-- Add this
+                content: msg['content'],
+                timestamp: DateTime.parse(msg['timestamp']),
+                isFromUser: msg['sender'] == _userId,
+                profileImage: null,
+                isRead: true,
+              ),
+            );
+          }
+          _filteredMessages = List.from(_messages);
+        });
+      }
+    } catch (e) {
+      print('Error fetching messages: $e');
+    }
+  }
+
+  Widget _buildMessageItem(MessageItem message) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: message.profileImage != null
+            ? AssetImage(message.profileImage!)
+            : null,
+      ),
+      title: Text(message.sender),
+      subtitle: Text(message.content),
+      trailing: Text(
+        _formatTimestamp(message.timestamp),
+        style: TextStyle(fontSize: 12, color: Colors.grey),
+      ),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatDetailScreen(
+              title: message.sender,
+              profileImage: message.profileImage,
+              messages: _messages
+                  .where((m) => m.sender == message.sender || m.isFromUser)
+                  .toList(),
+              onSendMessage: (text) {
+                setState(() {
+                  _messages.insert(
+                    0,
+                    MessageItem(
+                      sender: _userId ?? "You",
+                      recipient: message.sender, // <-- Add recipient here
+                      content: text,
+                      timestamp: DateTime.now(),
+                      isFromUser: true,
+                      isRead: true,
+                    ),
+                  );
+                });
+                // Optionally emit socket event here
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    // Format the timestamp as needed
+    return '${timestamp.hour}:${timestamp.minute}';
+  }
+
+  String _formatDate(DateTime date) {
+    // Example: 4/12/2025
+    return "${date.month}/${date.day}/${date.year}";
+  }
+
+  Widget _buildUserSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'Search users...',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        onChanged: (query) {
+          setState(() {
+            _filteredUsers = _users
+                .where((user) => (user['firstName'] ??
+                        user['fullName'] ??
+                        user['username'] ??
+                        '')
+                    .toLowerCase()
+                    .contains(query.toLowerCase()))
+                .toList();
+          });
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: const CustomAppBar(
-        isInboxScreen: true, // Highlights the mail icon
-        showBackButton: true, actions: [], title: '', // Shows back button
+      appBar: CustomAppBar(
+        title: 'Inbox',
+        actions: [],
+        isInboxScreen: true,
       ),
       body: Column(
         children: [
-          _buildSearchBar(),
-          Expanded(
-            child: _messages.isEmpty ? _buildEmptyState() : _buildConversationsList(),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xff203B32),
-        onPressed: () {
-          // Implement new message functionality
-        },
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search conversations...',
-          prefixIcon: const Icon(Icons.search, color: Color(0xff203B32)),
-          suffixIcon: _searchQuery.isNotEmpty 
-              ? IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xff203B32)),
-                  onPressed: () {
-                    setState(() {
-                      _searchController.clear();
-                      _filterMessages('');
-                    });
-                  },
-                )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey[300]!),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.grey[300]!),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xff203B32)),
-          ),
-          filled: true,
-          fillColor: Colors.grey[100],
-          contentPadding: const EdgeInsets.symmetric(vertical: 0),
-        ),
-        onChanged: _filterMessages,
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.inbox,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            "Your inbox is empty",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Messages from your collaborators will appear here",
-            style: TextStyle(
-              color: Colors.grey[500],
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              // Start a new conversation
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xff203B32),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Start a conversation'),
-          ),
+          _buildUserSearchBar(),
+          Expanded(child: _buildConversationsList()),
         ],
       ),
     );
   }
 
   Widget _buildConversationsList() {
-    final List<String> uniqueSenders = _messages
-        .map((m) => m.sender)
-        .toSet()
-        .toList();
-    
-    // If searching, filter unique senders to only those in filtered messages
-    final filteredSenders = _searchQuery.isNotEmpty
-        ? uniqueSenders.where((sender) => 
-            _filteredMessages.any((m) => m.sender == sender)).toList()
-        : uniqueSenders;
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+      itemCount: _filteredUsers.length,
+      itemBuilder: (context, index) {
+        final user = _filteredUsers[index];
+        // Find the latest message with this user
+        final latestMessage = _messages
+                .where((m) =>
+                    m.sender == user['username'] ||
+                    m.sender == user['fullName'] ||
+                    m.sender == user['firstName'])
+                .toList()
+                .isNotEmpty
+            ? _messages
+                .where((m) =>
+                    m.sender == user['username'] ||
+                    m.sender == user['fullName'] ||
+                    m.sender == user['firstName'])
+                .toList()
+                .first
+            : null;
 
-    return filteredSenders.isEmpty && _searchQuery.isNotEmpty
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.search_off,
-                  size: 48,
-                  color: Colors.grey[400],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  "No conversations found",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          )
-        : ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-            itemCount: filteredSenders.length,
-            itemBuilder: (context, index) {
-              final sender = filteredSenders[index];
-              final latestMessage = _messages.firstWhere((m) => m.sender == sender);
-              
-              return _buildConversationItem(latestMessage, context);
-            },
-          );
-  }
+        final displayName = user['firstName'] ??
+            user['fullName'] ??
+            user['username'] ??
+            'Unknown';
 
-  Widget _buildConversationItem(MessageItem message, BuildContext context) {
-    final isUserMessage = message.isFromUser;
-    final displayName = isUserMessage ? "You" : message.sender;
-
-    return InkWell(
-      onTap: () {
-        // Mark as read when opening
-        if (!message.isRead) {
-          setState(() {
-            final index = _messages.indexWhere(
-                (m) => m.sender == message.sender && m.timestamp == message.timestamp);
-            if (index != -1) {
-              _messages[index] = MessageItem(
-                sender: message.sender,
-                content: message.content,
-                timestamp: message.timestamp,
-                isFromUser: message.isFromUser,
-                profileImage: message.profileImage,
-                isRead: true,
-              );
+        return InkWell(
+          onTap: () async {
+            // Mark as read if needed
+            if (latestMessage != null && !latestMessage.isRead) {
+              setState(() {
+                final idx = _messages.indexOf(latestMessage);
+                if (idx != -1) {
+                  _messages[idx] = MessageItem(
+                    sender: latestMessage.sender,
+                    recipient:
+                        latestMessage.recipient, // <-- Add recipient here
+                    content: latestMessage.content,
+                    timestamp: latestMessage.timestamp,
+                    isFromUser: latestMessage.isFromUser,
+                    profileImage: latestMessage.profileImage,
+                    isRead: true,
+                  );
+                }
+              });
             }
-          });
-        }
-        _openChatDetail(message);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16.0),
-        padding: const EdgeInsets.all(16.0),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(12.0),
-          color: message.isRead ? Colors.white : Colors.grey[50],
-        ),
-        child: Row(
-          children: [
-            // Profile image
-            Stack(
+            // Fetch messages for this user first
+            await _fetchMessagesForUser(user);
+
+            // Then open chat detail
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatDetailScreen(
+                  title: displayName,
+                  profileImage: null,
+                  messages: _messages
+                      .where((m) =>
+                          // Show messages where the selected user is either sender or recipient
+                          (m.sender == user['_id'] && m.recipient == _userId) ||
+                          (m.sender == _userId && m.recipient == user['_id']))
+                      .toList(),
+                  onSendMessage: (text) {
+                    setState(() {
+                      _messages.insert(
+                        0,
+                        MessageItem(
+                          sender: _userId ?? "You",
+                          recipient: user['_id'], // Use user ID, not username
+                          content: text,
+                          timestamp: DateTime.now(),
+                          isFromUser: true,
+                          isRead: true,
+                        ),
+                      );
+                    });
+                    _socket.emit('send_private_message', {
+                      'sender': _userId,
+                      'recipientId': user['_id'],
+                      'content': text,
+                      'timestamp': DateTime.now().toIso8601String(),
+                    });
+                  },
+                ),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 16.0),
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(12.0),
+              color: (latestMessage != null && !latestMessage.isRead)
+                  ? Colors.grey[50]
+                  : Colors.white,
+            ),
+            child: Row(
               children: [
-                if (!isUserMessage)
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundImage: message.profileImage != null
-                        ? AssetImage(message.profileImage!)
-                        : null,
-                    child: message.profileImage == null
-                        ? const Icon(Icons.person, color: Colors.white)
-                        : null,
-                  ),
-                if (isUserMessage)
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: const Color(0xff203B32),
-                    child: const Icon(Icons.person, color: Colors.white),
-                  ),
-                if (!message.isRead)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: const BoxDecoration(
-                        color: Color(0xff203B32),
-                        shape: BoxShape.circle,
+                // Avatar
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: Colors.green[700],
+                      child: Text(
+                        displayName[0].toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 16),
-            // Message preview
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: message.isRead ? FontWeight.normal : FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    message.content,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                      fontWeight: message.isRead ? FontWeight.normal : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Timestamp
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _formatDate(message.timestamp),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
+                    if (latestMessage != null && !latestMessage.isRead)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: const BoxDecoration(
+                            color: Color(0xff203B32),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                // Message preview
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight:
+                              (latestMessage != null && !latestMessage.isRead)
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        latestMessage?.content ?? 'Start a conversation...',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                          fontWeight:
+                              (latestMessage != null && !latestMessage.isRead)
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                if (!message.isRead)
-                  const Icon(
-                    Icons.circle,
-                    size: 10,
-                    color: Color(0xff203B32),
-                  ),
+                // Timestamp
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      latestMessage != null
+                          ? _formatDate(latestMessage.timestamp)
+                          : '',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (latestMessage != null && !latestMessage.isRead)
+                      const Icon(
+                        Icons.circle,
+                        size: 10,
+                        color: Color(0xff203B32),
+                      ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = DateTime(now.year, now.month, now.day - 1);
-    final messageDate = DateTime(date.year, date.month, date.day);
-
-    if (messageDate == today) {
-      return '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (messageDate == yesterday) {
-      return 'Yesterday';
-    } else {
-      return '${date.month}/${date.day}/${date.year}';
-    }
-  }
-
-  void _openChatDetail(MessageItem message) {
-    final sender = message.isFromUser ? "You" : message.sender;
-    final conversationMessages = _messages
-        .where((m) => m.isFromUser || m.sender == message.sender)
-        .toList();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ChatDetailScreen(
-          title: sender,
-          profileImage: message.isFromUser ? null : message.profileImage,
-          messages: conversationMessages,
-          onSendMessage: (text) {
-            setState(() {
-              _messages.insert(
-                0,
-                MessageItem(
-                  sender: "You",
-                  content: text,
-                  timestamp: DateTime.now(),
-                  isFromUser: true,
-                  isRead: true,
-                ),
-              );
-            });
-          },
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
 class MessageItem {
   final String sender;
+  final String recipient; // <-- Add this
   final String content;
   final DateTime timestamp;
   final bool isFromUser;
@@ -405,10 +432,11 @@ class MessageItem {
 
   MessageItem({
     required this.sender,
+    required this.recipient, // <-- Add this
     required this.content,
     required this.timestamp,
     required this.isFromUser,
     this.profileImage,
-    this.isRead = true,
+    required this.isRead,
   });
 }

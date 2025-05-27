@@ -37,7 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userString = prefs.getString('user');
     if (userString != null) {
       final user = jsonDecode(userString);
-      print('Loaded user: $user'); 
+      print('Loaded user: $user');
       setState(() {
         _nameController.text = user['fullName'] ?? user['username'];
         _emailController.text = user['email'] ?? '';
